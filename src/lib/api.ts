@@ -26,6 +26,21 @@ const baseUrl = ((): string => {
   return value.endsWith('/') ? value.slice(0, -1) : value;
 })();
 
+export async function ingest(
+  caseIdOrSlug: string
+): Promise<{ snapshot_id: string; xbrl_upload_id: number; tb_upload_id: number }> {
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  const res = await fetch(`${base}/cases/${encodeURIComponent(caseIdOrSlug)}/ingest`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function apiFetch<TResponse>(path: string, init?: RequestInit): Promise<TResponse> {
   const url = `${baseUrl}/${sanitizePath(path)}`;
   const response = await fetch(url, {

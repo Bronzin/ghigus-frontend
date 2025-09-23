@@ -1,195 +1,246 @@
-import { FormEvent, useMemo, useState } from 'react';
-import AssumptionsForm from '../components/AssumptionsForm';
-import FileDrop from '../components/FileDrop';
-import { Assumption, WizardStep } from '../types';
+// src/pages/NewCase.tsx
+import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import FileDrop from "../components/FileDrop";
+import Card from "../components/Card";
+import { useToasts } from "../hooks/useToasts";
+import { addRecentCase } from "../lib/storage";
+import { createCase, uploadTb, uploadXbrl, ingest, compute } from "../lib/apiWizard";
+import type { ComputeResponse } from "../lib/apiWizard";
 
-const steps: WizardStep[] = [
-  {
-    id: 'upload',
-    title: 'Dataset',
-    description: 'Carica i dati necessari alla simulazione e definisci le informazioni base.'
-  },
-  {
-    id: 'assumptions',
-    title: 'Assunzioni',
-    description: 'Personalizza i parametri che guideranno il modello previsivo.'
-  },
-  {
-    id: 'review',
-    title: 'Riepilogo',
-    description: 'Controlla e conferma la configurazione del caso.'
-  }
-];
+const steps = ["Metadati", "Upload TB", "Upload XBRL", "Ingest & Compute"];
+const defaultCompany = "1";
+const slugify = (s: string) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
 
-const NewCase = () => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [caseName, setCaseName] = useState('Scenario Q1 2025');
-  const [notes, setNotes] = useState('');
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [assumptions, setAssumptions] = useState<Assumption[]>([
-    {
-      id: 'growth',
-      label: 'Tasso di crescita mensile',
-      value: 4.2,
-      unit: '%',
-      description: 'Incremento medio atteso basato sui dati storici.'
-    },
-    {
-      id: 'churn',
-      label: 'Churn clienti',
-      value: 2.1,
-      unit: '%',
-      description: 'Tasso medio di abbandono mensile.'
-    },
-    {
-      id: 'marketing',
-      label: 'Budget marketing mensile',
-      value: 48000,
-      unit: '€',
-      description: 'Budget totale destinato alle campagne paid.'
+export default function NewCase() {
+  const navigate = useNavigate();
+  const toast = useToasts();
+  const [step, setStep] = useState<number>(1);
+
+  // metadati
+  const [name, setName] = useState<string>("debug 6");
+  const [slug, setSlug] = useState<string>("debug-6");
+  const [companyId, setCompanyId] = useState<string>(defaultCompany);
+
+  // files
+  const [tbFile, setTbFile] = useState<File | null>(null);
+  const [xbrlFile, setXbrlFile] = useState<File | null>(null);
+
+  const [busy, setBusy] = useState<boolean>(false);
+  const [log, setLog] = useState<string[]>([]);
+  const pushLog = (line: string) => setLog((ls) => [...ls, `• ${line}`]);
+
+  const canCreate = name.trim().length > 0 && slug.trim().length > 0;
+
+  const canNext = useMemo(() => {
+    if (busy) return false;
+    if (step === 1) return canCreate;
+    if (step === 2) return !!tbFile;
+    if (step === 3) return !!xbrlFile;
+    return true;
+  }, [busy, step, canCreate, tbFile, xbrlFile]);
+
+  const nextLabel = useMemo(() => {
+    switch (step) {
+      case 1: return "Crea pratica";
+      case 2: return "Carica TB";
+      case 3: return "Carica XBRL";
+      case 4: return "Ingest & Compute";
+      default: return "Avanti";
     }
-  ]);
+  }, [step]);
 
-  const progress = useMemo(() => ((currentStep + 1) / steps.length) * 100, [currentStep]);
+  const handleNext = async () => {
+    if (!canNext) return;
 
-  const handleNext = () => {
-    setCurrentStep((step) => Math.min(step + 1, steps.length - 1));
+    if (step === 1) {
+      setBusy(true);
+      try {
+        await createCase({ slug, name, company_id: companyId });
+        pushLog(`Creato/Verificato case con slug "${slug}"`);
+        toast.success("Pratica creata/verificata");
+        setStep(2);
+      } catch (e: any) {
+        const msg = String(e?.message || "");
+        if (msg.toLowerCase().includes("slug already exists")) {
+          pushLog(`Case già esistente: uso slug "${slug}"`);
+          toast.success("Pratica già esistente: continuo");
+          setStep(2);
+        } else {
+          pushLog(`Errore creazione case: ${msg}`);
+          toast.error(`Errore creazione: ${msg}`);
+        }
+      } finally { setBusy(false); }
+      return;
+    }
+
+    if (step === 2) {
+      if (!tbFile) return;
+      setBusy(true);
+      try {
+        await uploadTb(slug, tbFile);
+        pushLog("Upload TB completato");
+        toast.success("TB caricato");
+        setStep(3);
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        pushLog(`Errore upload TB: ${msg}`);
+        toast.error(`Upload TB: ${msg}`);
+      } finally { setBusy(false); }
+      return;
+    }
+
+    if (step === 3) {
+      if (!xbrlFile) return;
+      setBusy(true);
+      try {
+        await uploadXbrl(slug, xbrlFile);
+        pushLog("Upload XBRL completato");
+        toast.success("XBRL caricato");
+        setStep(4);
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        pushLog(`Errore upload XBRL: ${msg}`);
+        toast.error(`Upload XBRL: ${msg}`);
+      } finally { setBusy(false); }
+      return;
+    }
+
+    if (step === 4) {
+      setBusy(true);
+      try {
+        await ingest(slug);
+        pushLog("Snapshot creato (ingest)");
+        toast.success("Snapshot creato");
+
+        const res: ComputeResponse = await compute(slug);
+        pushLog("Compute eseguito");
+        toast.success("Compute ok");
+
+        // salva tra i recenti e vai ai risultati
+        addRecentCase(slug, name);
+        navigate(`/results/${encodeURIComponent(slug)}`, { state: { compute: res } });
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        pushLog(`Errore ingest/compute: ${msg}`);
+        toast.error(`Ingest/compute: ${msg}`);
+      } finally { setBusy(false); }
+      return;
+    }
   };
 
-  const handlePrev = () => {
-    setCurrentStep((step) => Math.max(step - 1, 0));
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    alert('Caso creato! (mock)');
-  };
+  const handleBack = () => { if (!busy && step > 1) setStep(step - 1); };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-100">Nuovo caso</h1>
-        <p className="text-sm text-slate-400">Wizard in tre step per configurare una nuova simulazione.</p>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-slate-300">Step {currentStep + 1} di {steps.length}</p>
-            <p className="text-xs text-slate-500">{steps[currentStep].title}</p>
-          </div>
-          <div className="h-2 flex-1 rounded-full bg-slate-800">
-            <div className="h-2 rounded-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
+    <div className="space-y-6">
+      {/* Header + progress */}
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-100">{steps[currentStep].title}</h2>
-          <p className="text-sm text-slate-400">{steps[currentStep].description}</p>
+          <h1 className="heading">Nuova pratica</h1>
+          <p className="text-sm muted">Wizard a 4 step, collegato al backend</p>
         </div>
-
-        {currentStep === 0 && (
-          <div className="space-y-5">
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Nome caso</span>
-              <input
-                value={caseName}
-                onChange={(event) => setCaseName(event.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-brand-500 focus:outline-none"
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">Dataset</span>
-              <FileDrop onFilesSelected={setFiles} multiple={false} hint="CSV o XLSX fino a 20MB" />
-              {files && files.length > 0 && (
-                <p className="mt-2 text-xs text-slate-400">
-                  Selezionato: <span className="font-semibold text-slate-200">{files[0].name}</span>
-                </p>
-              )}
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-400">Note</span>
-              <textarea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                rows={3}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 focus:border-brand-500 focus:outline-none"
-              />
-            </label>
-          </div>
-        )}
-
-        {currentStep === 1 && <AssumptionsForm assumptions={assumptions} onChange={setAssumptions} />}
-
-        {currentStep === 2 && (
-          <div className="space-y-4 text-sm text-slate-300">
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Riepilogo generale</h3>
-              <ul className="mt-2 space-y-2 text-sm">
-                <li>
-                  <span className="text-slate-400">Nome caso:</span>{' '}
-                  <span className="font-semibold text-slate-100">{caseName}</span>
-                </li>
-                <li>
-                  <span className="text-slate-400">Dataset:</span>{' '}
-                  <span className="font-semibold text-slate-100">{files?.[0]?.name ?? 'Non caricato'}</span>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Assunzioni</h3>
-              <ul className="mt-2 space-y-1 text-slate-300">
-                {assumptions.map((assumption) => (
-                  <li key={assumption.id} className="flex justify-between gap-2 rounded-lg bg-slate-950/60 px-3 py-2">
-                    <span>{assumption.label}</span>
-                    <span className="font-semibold">
-                      {assumption.value}
-                      {assumption.unit && <span className="ml-1 text-xs text-slate-400">{assumption.unit}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {notes && (
-              <div>
-                <h3 className="text-base font-semibold text-slate-100">Note</h3>
-                <p className="mt-2 whitespace-pre-line rounded-lg bg-slate-950/60 px-3 py-2 text-slate-300">{notes}</p>
-              </div>
-            )}
-          </div>
-        )}
+        <div className="h-2 w-64 rounded-full bg-slate-800">
+          <div className="h-2 rounded-full bg-brand-600 transition-all" style={{ width: `${(step/4)*100}%` }} />
+        </div>
       </div>
 
-      <div className="flex justify-between">
-        <button
-          type="button"
-          onClick={handlePrev}
-          disabled={currentStep === 0}
-          className="rounded-full border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-slate-600"
-        >
+      {/* Step content */}
+      <Card>
+        <div className="space-y-4">
+          <div className="text-sm uppercase tracking-wide text-slate-400">
+            {step}. {steps[step - 1]}
+          </div>
+
+          {step === 1 && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm mb-1 text-slate-300">Nome pratica</label>
+                <input
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 focus:outline-none focus:border-brand-600"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    const auto = slugify(e.target.value);
+                    if (!slug || slug === slugify(name)) setSlug(auto);
+                  }}
+                  placeholder="Es. debug 6"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1 text-slate-300">Slug</label>
+                <input
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono focus:outline-none focus:border-brand-600"
+                  value={slug}
+                  onChange={(e) => setSlug(slugify(e.target.value))}
+                  placeholder="debug-6"
+                />
+              </div>
+              <div>
+                <label className="block text-sm mb-1 text-slate-300">Company ID</label>
+                <input
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 focus:outline-none focus:border-brand-600"
+                  value={companyId}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  placeholder="1"
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <FileDrop
+              accept=".csv,text/csv"
+              label="Trascina qui il Trial Balance (CSV) oppure clicca"
+              hint='Header: account_code,account_name,debit,credit'
+              onFilesSelected={(files) => setTbFile(files?.[0] ?? null)}
+            />
+          )}
+
+          {step === 3 && (
+            <>
+              <FileDrop
+                accept=".xml,.xbrl,application/xml"
+                label="Trascina qui il Bilancio XBRL (XML) oppure clicca"
+                hint="Per l'MVP è sufficiente un XML ben formato (parser XBRL è stub)."
+                onFilesSelected={(files) => setXbrlFile(files?.[0] ?? null)}
+              />
+              {xbrlFile && (
+                <div className="text-sm mt-2">
+                  Selezionato: <span className="font-mono">{xbrlFile.name}</span>
+                </div>
+              )}
+            </>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-300">Pronto a creare lo snapshot (ingest) e calcolare KPI/distribuzioni.</p>
+              <ul className="text-xs muted list-disc pl-5">
+                <li>Ingest usa la coppia TB+XBRL più recenti</li>
+                <li>Compute (MVP) calcola KPI e CNC/LG a partire dal TB</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={handleBack} disabled={busy || step === 1} className="btn-ghost disabled:opacity-50">
           Indietro
         </button>
-        {currentStep < steps.length - 1 ? (
-          <button
-            type="button"
-            onClick={handleNext}
-            className="rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-brand-600/40 transition hover:bg-brand-500"
-          >
-            Avanti
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-slate-900 shadow-lg shadow-emerald-500/40 transition hover:bg-emerald-400"
-          >
-            Crea caso
-          </button>
-        )}
+        <button type="button" onClick={handleNext} disabled={!canNext} className="btn-primary disabled:opacity-50">
+          {busy ? "Attendere..." : nextLabel}
+        </button>
       </div>
-    </form>
-  );
-};
 
-export default NewCase;
+      {/* Log */}
+      {log.length > 0 && (
+        <Card>
+          <div className="text-sm font-medium mb-2">Log</div>
+          <div className="text-xs text-slate-400 whitespace-pre-wrap">{log.join("\n")}</div>
+        </Card>
+      )}
+    </div>
+  );
+}

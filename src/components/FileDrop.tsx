@@ -1,57 +1,49 @@
-import { type ChangeEvent, type DragEvent, useCallback, useState } from 'react';
+import React, { useRef, useState } from "react";
 
-interface FileDropProps {
-  onFilesSelected: (files: FileList | null) => void;
+export default function FileDrop({
+  accept,
+  label,
+  hint,
+  onFilesSelected,
+}: {
   accept?: string;
-  multiple?: boolean;
   label?: string;
   hint?: string;
-}
-
-const FileDrop = ({ onFilesSelected, accept, multiple = false, label = 'Carica file', hint }: FileDropProps) => {
-  const [isDragOver, setDragOver] = useState(false);
-
-  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    setDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
-    event.preventDefault();
-    setDragOver(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (event: DragEvent<HTMLLabelElement>) => {
-      event.preventDefault();
-      setDragOver(false);
-      onFilesSelected(event.dataTransfer.files);
-    },
-    [onFilesSelected]
-  );
-
-  const handleChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      onFilesSelected(event.target.files);
-    },
-    [onFilesSelected]
-  );
+  onFilesSelected: (files: FileList | null) => void;
+}) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  const [hover, setHover] = useState(false);
 
   return (
-    <label
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
-        isDragOver ? 'border-brand-500 bg-brand-600/10 text-brand-100' : 'border-slate-700 bg-slate-900/60 text-slate-300'
+    <div
+      className={`border-2 border-dashed rounded-2xl p-6 text-center transition ${
+        hover ? "border-brand-600 bg-slate-900/50" : "border-slate-700"
       }`}
+      onDragOver={(e) => { e.preventDefault(); setHover(true); }}
+      onDragLeave={() => setHover(false)}
+      onDrop={(e) => {
+        e.preventDefault(); setHover(false);
+        onFilesSelected(e.dataTransfer.files);
+      }}
     >
-      <span className="text-lg font-semibold">{label}</span>
-      <span className="text-xs text-slate-400">Trascina e rilascia oppure clicca per selezionare</span>
-      {hint && <span className="text-xs text-slate-500">{hint}</span>}
-      <input type="file" className="hidden" onChange={handleChange} accept={accept} multiple={multiple} />
-    </label>
+      <p className="mb-3 font-medium text-slate-200">
+        {label ?? "Trascina qui il file oppure clicca"}
+      </p>
+      <button
+        type="button"
+        onClick={() => ref.current?.click()}
+        className="btn-primary"
+      >
+        Scegli file
+      </button>
+      {hint && <p className="mt-3 text-sm muted">{hint}</p>}
+      <input
+        ref={ref}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={(e) => onFilesSelected(e.target.files)}
+      />
+    </div>
   );
-};
-
-export default FileDrop;
+}

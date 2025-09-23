@@ -2,11 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  min-height: 100vh;
+@layer base {
+  :root { color-scheme: dark; }
+  html, body, #root { height: 100%; }
+  body { @apply bg-slate-950 text-slate-100 antialiased; }
 }
 
-#root {
-  min-height: 100vh;
+@layer components {
+  .card {
+    @apply rounded-2xl border border-slate-800 bg-slate-900/60 shadow-sm;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-full font-medium transition;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-500 shadow-lg;
+  }
+  .btn-ghost {
+    @apply btn bg-slate-800/70 text-slate-200 hover:bg-slate-800;
+  }
+  .muted { @apply text-slate-400; }
+  .heading { @apply text-xl font-semibold; }
 }
