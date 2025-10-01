@@ -15,7 +15,7 @@ import {
   compute,          // se preferisci: import { process as processCase }
 } from "../lib/apiWizard";
 
-const steps = ["Metadati", "Upload TB", "Upload XBRL", "Ingest & Compute"];
+const steps = ["Inserisci i seguenti dati", "Carica il Bilancio Contabile", "Carica il Bilancio XBRL", "Avvia la procedura"];
 const defaultCompany = "1";
 const slugify = (s: string) =>
   s.toLowerCase()
@@ -55,9 +55,9 @@ export default function NewCase() {
   const nextLabel = useMemo(() => {
     switch (step) {
       case 1: return "Crea pratica";
-      case 2: return "Carica TB";
+      case 2: return "Carica Bilancio Contabile";
       case 3: return "Carica XBRL";
-      case 4: return "Ingest & Compute";
+      case 4: return "Avvia processo";
       default: return "Avanti";
     }
   }, [step]);
@@ -150,7 +150,7 @@ export default function NewCase() {
       {/* Header + progress */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="heading">Nuova pratica</h1>
+          <h1 className="heading">Procedura guidata per la creazione di una nuova Pratica CNC</h1>
           <p className="text-sm muted">Wizard a 4 step, collegato al backend</p>
         </div>
         <div className="h-2 w-64 rounded-full bg-slate-800">
@@ -204,7 +204,7 @@ export default function NewCase() {
           {step === 2 && (
             <FileDrop
               accept=".csv,text/csv"
-              label="Trascina qui il Trial Balance (CSV) oppure clicca"
+              label="Trascina qui il Bilancio Contabile (CSV) oppure clicca"
               hint='Header: account_code,account_name,debit,credit'
               onFilesSelected={(files) => setTbFile(files?.[0] ?? null)}
             />

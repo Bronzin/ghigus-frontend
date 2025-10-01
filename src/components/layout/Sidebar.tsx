@@ -22,24 +22,39 @@ export default function Sidebar() {
     };
   }, []);
 
-  return (
-    <aside className="h-full w-64 border-r border-slate-800 bg-slate-950/60">
-      {/* Brand: logo cane + testo "Ghigus" TUTTO cliccabile → / */}
-      <Link
-        to="/"
-        aria-label="Torna alla Dashboard"
-        className="mx-2 mt-2 mb-1 flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-900 transition"
-      >
-        <img
-          src={ghigo}
-          alt="Logo Ghigus"
-          className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-700"
-        />
-        <div className="text-lg font-semibold tracking-tight">Ghigus</div>
-        <span className="ml-2 text-xs rounded-full px-2 py-0.5 border border-slate-700 text-slate-300">
-          Beta
-        </span>
-      </Link>
+	return (
+	  <aside className="h-full w-64 border-r border-slate-800 bg-slate-950/60">
+		{/* Brand: logo cane + testo "Ghigus" TUTTO cliccabile → / */}
+	<Link
+	  to="/"
+	  aria-label="Torna alla Dashboard"
+	  className="mx-2 mt-2 mb-1 flex items-center gap-4 rounded-xl px-3 py-3 hover:bg-slate-900 transition"
+	>
+	  <img
+		src={ghigo}
+		alt="Logo Ghigus"
+		className="h-12 w-12 rounded-2xl object-cover ring-1 ring-slate-700"
+	  />
+
+	  {/* Titolo + badge su una riga, con baselines allineate */}
+	  <div className="flex items-baseline gap-2">
+		<div className="text-4xl leading-none font-extrabold tracking-tight gh-gradient-text">
+		  Ghigus
+		</div>
+
+		{/* badge più piccolo + baseline allineata */}
+		<span
+		  className="
+			inline-flex items-center
+			rounded-full border border-slate-700 text-slate-300
+			text-[10px] leading-none px-1.5 py-[2px]
+		  "
+		>
+		  Beta
+		</span>
+	  </div>
+	</Link>
+
 
       {/* Nav principale */}
       <nav className="px-2 py-2 space-y-1">
