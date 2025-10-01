@@ -41,6 +41,40 @@ export async function ingest(
   return res.json();
 }
 
+// === AGGIUNTA: compute & process ===
+
+export async function compute(caseIdOrSlug: string): Promise<any> {
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  const res = await fetch(`${base}/cases/${encodeURIComponent(caseIdOrSlug)}/compute`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  // alcune API potrebbero non ritornare JSON → non forziamo
+  try { return await res.json(); } catch { return undefined; }
+}
+
+export async function process(caseIdOrSlug: string): Promise<any> {
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  const res = await fetch(`${base}/cases/${encodeURIComponent(caseIdOrSlug)}/process`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  try { return await res.json(); } catch { return undefined; }
+}
+
+// alias comodi (se altrove importi computeCase/processCase)
+export const computeCase = compute;
+export const processCase = process;
+
+
 export async function apiFetch<TResponse>(path: string, init?: RequestInit): Promise<TResponse> {
   const url = `${baseUrl}/${sanitizePath(path)}`;
   const response = await fetch(url, {

@@ -5,12 +5,24 @@ import FileDrop from "../components/FileDrop";
 import Card from "../components/Card";
 import { useToasts } from "../hooks/useToasts";
 import { addRecentCase } from "../lib/storage";
-import { createCase, uploadTb, uploadXbrl, ingest, compute } from "../lib/apiWizard";
-import type { ComputeResponse } from "../lib/apiWizard";
+
+// ⬅️ Usa **un solo** modulo per tutto il wizard (stesso stile e stessa base URL)
+import {
+  createCase,
+  uploadTB as uploadTb,
+  uploadXBRL as uploadXbrl,
+  ingest,
+  compute,          // se preferisci: import { process as processCase }
+} from "../lib/apiWizard";
 
 const steps = ["Metadati", "Upload TB", "Upload XBRL", "Ingest & Compute"];
 const defaultCompany = "1";
-const slugify = (s: string) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
+const slugify = (s: string) =>
+  s.toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 
 export default function NewCase() {
   const navigate = useNavigate();
@@ -56,7 +68,7 @@ export default function NewCase() {
     if (step === 1) {
       setBusy(true);
       try {
-        await createCase({ slug, name, company_id: companyId });
+        await createCase({ slug, name, company_id: companyId } as any);
         pushLog(`Creato/Verificato case con slug "${slug}"`);
         toast.success("Pratica creata/verificata");
         setStep(2);
@@ -109,11 +121,13 @@ export default function NewCase() {
     if (step === 4) {
       setBusy(true);
       try {
+        // ➜ POST /cases/{slug}/ingest
         await ingest(slug);
         pushLog("Snapshot creato (ingest)");
         toast.success("Snapshot creato");
 
-        const res: ComputeResponse = await compute(slug);
+        // ➜ POST /cases/{slug}/compute
+        const res = await compute(slug);              // oppure: await processCase(slug);
         pushLog("Compute eseguito");
         toast.success("Compute ok");
 
@@ -226,10 +240,20 @@ export default function NewCase() {
 
       {/* Actions */}
       <div className="flex items-center justify-between">
-        <button type="button" onClick={handleBack} disabled={busy || step === 1} className="btn-ghost disabled:opacity-50">
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={busy || step === 1}
+          className="btn-ghost disabled:opacity-50"
+        >
           Indietro
         </button>
-        <button type="button" onClick={handleNext} disabled={!canNext} className="btn-primary disabled:opacity-50">
+        <button
+          type="button"
+          onClick={handleNext}
+          disabled={!canNext}
+          className="btn-primary disabled:opacity-50"
+        >
           {busy ? "Attendere..." : nextLabel}
         </button>
       </div>

@@ -1,123 +1,149 @@
 // src/lib/apiWizard.ts
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+// Client leggero per le azioni della “procedura guidata” (wizard):
+// - create case, upload TB/XBRL, ingest, compute, process
+// - letture minime per dashboard (riclass/KPI) e gestione casi
 
-async function handle<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+// =====================================================
+// Base URL (compatibile Vite)
+// Legge VITE_API_BASE o VITE_API_BASE_URL, con fallback a 127.0.0.1
+// =====================================================
+function getApiBase(): string {
+  const envBase =
+    (import.meta as any).env?.VITE_API_BASE ??
+    (import.meta as any).env?.VITE_API_BASE_URL ??
+    "http://127.0.0.1:8000";
+  return String(envBase).replace(/\/$/, "");
+}
+
+// =====================================================
+// Helper HTTP
+// =====================================================
+type FetchInit = Omit<RequestInit, "body"> & {
+  json?: any;
+  form?: FormData;
+  token?: string;
+};
+
+async function http<T = unknown>(path: string, init: FetchInit = {}): Promise<T> {
+  const url = `${getApiBase()}${path}`;
+  const headers = new Headers(init.headers);
+
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+
+  let body: BodyInit | undefined;
+  if (init.json !== undefined) {
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    body = JSON.stringify(init.json);
+  } else if (init.form) {
+    body = init.form; // non settare Content-Type: pensa il browser (boundary)
   }
-  return res.json();
-}
 
-export type Trend = "up" | "down" | "flat";
+  if (init.token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${init.token}`);
+  }
 
-export interface KPI {
-  id: string;
-  label: string;
-  value: number;
-  unit?: string;
-  trend?: Trend;
-}
-
-export interface DistributionItem {
-  label: string;
-  percent: number; // 0..1
-  amount: number;
-}
-
-export interface ComputeResponse {
-  kpis: KPI[];
-  cnc: DistributionItem[];
-  lg: DistributionItem[];
-}
-
-export interface CaseMeta {
-  id: string;
-  slug: string;
-  name: string;
-  company_id: string;
-  description?: string;
-}
-
-export async function createCase(input: {
-  slug: string;
-  name: string;
-  company_id: string;
-  description?: string;
-}): Promise<CaseMeta> {
-  const res = await fetch(`${API_BASE}/cases`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(input),
-  });
-  return handle<CaseMeta>(res);
-}
-
-export async function uploadTb(caseIdOrSlug: string, file: File): Promise<any> {
-  const fd = new FormData();
-  fd.append("file", file);
-  const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(caseIdOrSlug)}/upload-tb`, {
-    method: "POST",
-    body: fd,
-    headers: { Accept: "application/json" },
-  });
-  return handle<any>(res);
-}
-
-
-export async function uploadXbrl(caseIdOrSlug: string, file: File): Promise<any> {
-  // Forza il content-type a application/xml per evitare il 400 del backend
-  const xFile =
-    file.type && file.type.includes("xml")
-      ? file
-      : new File([file], file.name, { type: "application/xml" });
-
-  const fd = new FormData();
-  // passiamo anche il filename così com'è
-  fd.append("file", xFile, xFile.name);
-
-  const res = await fetch(
-    `${import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"}/cases/${encodeURIComponent(
-      caseIdOrSlug
-    )}/upload-xbrl`,
-    {
-      method: "POST",
-      body: fd,
-      headers: { Accept: "application/json" },
-    }
-  );
+  const res = await fetch(url, { ...init, headers, body });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    const txt = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText} @ ${path} — ${txt}`);
   }
-  return res.json();
+
+  const ctype = res.headers.get("content-type") || "";
+  if (ctype.includes("application/json")) {
+    return (await res.json()) as T;
+  }
+  // alcune API potrebbero tornare vuoto o text
+  try {
+    return (await res.json()) as T;
+  } catch {
+    // @ts-expect-error: T può essere void
+    return undefined;
+  }
 }
 
-
-export async function ingest(caseIdOrSlug: string): Promise<{
-  snapshot_id: string;
-  xbrl_upload_id: number;
-  tb_upload_id: number;
-}> {
-  const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(caseIdOrSlug)}/ingest`, {
-    method: "POST",
-    headers: { Accept: "application/json" },
-  });
-  return handle(res);
+function fd(entries: Record<string, any>) {
+  const f = new FormData();
+  for (const [k, v] of Object.entries(entries)) {
+    if (v === undefined || v === null) continue;
+    f.append(k, v as any);
+  }
+  return f;
 }
 
-export async function compute(caseIdOrSlug: string): Promise<ComputeResponse> {
-  const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(caseIdOrSlug)}/compute`, {
-    headers: { Accept: "application/json" },
-  });
-  return handle<ComputeResponse>(res);
+// =====================================================
+// Tipi minimi
+// =====================================================
+export type CaseLite = { slug: string; name?: string | null; created_at?: string };
+export type RiclassRow = { riclass_code: string; riclass_desc?: string | null; amount: number };
+export type KpiStd = { code: string; description?: string | null; value: number | string | null };
+
+// =====================================================
+// Cases
+// =====================================================
+export async function createCase(payload: { slug: string; name?: string | null }, token?: string) {
+  return http<CaseLite>("/cases", { method: "POST", json: payload, token });
 }
 
-export async function listUploads(caseIdOrSlug: string): Promise<any[]> {
-  const res = await fetch(
-    `${API_BASE}/cases/${encodeURIComponent(caseIdOrSlug)}/uploads?include_signed=false`,
-    { headers: { Accept: "application/json" } }
-  );
-  return handle<any[]>(res);
+export async function listCases(token?: string) {
+  return http<CaseLite[]>("/cases", { token });
+}
+
+export async function deleteCase(slug: string, token?: string) {
+  await http<void>(`/cases/${encodeURIComponent(slug)}`, { method: "DELETE", token });
+}
+
+// =====================================================
+// Uploads
+// =====================================================
+export async function uploadTB(slug: string, file: File | Blob, filename?: string, token?: string) {
+  const name = filename || (file instanceof File ? file.name : "tb.csv");
+  const form = fd({ file: new File([file], name) });
+  return http<any>(`/cases/${encodeURIComponent(slug)}/upload-tb`, { method: "POST", form, token });
+}
+
+export async function uploadXBRL(slug: string, file: File | Blob, filename?: string, token?: string) {
+  const name = filename || (file instanceof File ? file.name : "bilancio.xhtml");
+  const form = fd({ file: new File([file], name) });
+  return http<any>(`/cases/${encodeURIComponent(slug)}/upload-xbrl`, { method: "POST", form, token });
+}
+
+// (se nel backend esiste anche upload-bc)
+export async function uploadBC(slug: string, file: File | Blob, filename?: string, token?: string) {
+  const name = filename || (file instanceof File ? file.name : "bc.csv");
+  const form = fd({ file: new File([file], name) });
+  return http<any>(`/cases/${encodeURIComponent(slug)}/upload-bc`, { method: "POST", form, token });
+}
+
+// =====================================================
+// Pipeline: ingest / compute / process
+//   ✅ tutte in POST per evitare 405
+// =====================================================
+export async function ingest(slug: string) {
+  return http<any>(`/cases/${encodeURIComponent(slug)}/ingest`, { method: "POST" });
+}
+
+export async function compute(slug: string) {
+  return http<any>(`/cases/${encodeURIComponent(slug)}/compute`, { method: "POST" });
+}
+
+export async function process(slug: string) {
+  return http<any>(`/cases/${encodeURIComponent(slug)}/process`, { method: "POST" });
+}
+
+// alias comodi se altrove usavi questi nomi
+export const computeCase = compute;
+export const processCase = process;
+
+// =====================================================
+// Letture dati per dashboard
+// =====================================================
+export async function getSpRiclass(slug: string) {
+  return http<RiclassRow[]>(`/cases/${encodeURIComponent(slug)}/sp-riclass`);
+}
+export async function getCeRiclass(slug: string) {
+  return http<RiclassRow[]>(`/cases/${encodeURIComponent(slug)}/ce-riclass`);
+}
+export async function getKpiStandard(slug: string) {
+  return http<KpiStd[]>(`/cases/${encodeURIComponent(slug)}/kpi-standard`);
 }
