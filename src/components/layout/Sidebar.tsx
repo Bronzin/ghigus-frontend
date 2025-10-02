@@ -26,7 +26,7 @@ export default function Sidebar() {
 	  <aside className="h-full w-64 border-r border-slate-800 bg-slate-950/60">
 		{/* Brand: logo cane + testo "Ghigus" TUTTO cliccabile → / */}
 	<Link
-	  to="/"
+	  to="/dashboard"
 	  aria-label="Torna alla Dashboard"
 	  className="mx-2 mt-2 mb-1 flex items-center gap-4 rounded-xl px-3 py-3 hover:bg-slate-900 transition"
 	>
