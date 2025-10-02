@@ -1,3 +1,4 @@
+// src/pages/Results.tsx
 import React from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -8,6 +9,7 @@ import {
   type KpiStd,
 } from "@/lib/apiWizard";
 import Card from "@/components/Card";
+import Skeleton from "@/components/Skeleton";
 
 export default function Results() {
   // accetta /results/:slug o /results/:caseId
@@ -39,7 +41,6 @@ export default function Results() {
         const [spR, ceR, kpiR] = await Promise.all([
           getSpRiclass(slug),
           getCeRiclass(slug),
-          // se l'endpoint non esiste o torna 404, non bloccare la pagina
           getKpiStandard(slug).catch(() => [] as KpiStd[]),
         ]);
         if (!cancelled) {
@@ -64,26 +65,70 @@ export default function Results() {
     return <div className="p-6">Slug non valido o assente nella URL.</div>;
   }
 
-  if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Caricamento risultati…</div>;
-  }
+	if (loading) {
+	  return (
+		<div className="p-6 space-y-6">
+		  <div>
+			<div className="text-2xl font-semibold mb-1">Risultati</div>
+			<div className="text-sm text-muted-foreground">Caricamento in corso…</div>
+		  </div>
+
+		  <div className="space-y-3">
+			<Skeleton className="h-5 w-40" />
+			<Skeleton className="h-28 w-full" />
+		  </div>
+
+		  <div className="space-y-3">
+			<Skeleton className="h-5 w-48" />
+			<Skeleton className="h-28 w-[92%]" />
+		  </div>
+
+		  <div className="space-y-3">
+			<Skeleton className="h-5 w-36" />
+			<Skeleton className="h-20 w-[70%]" />
+		  </div>
+		</div>
+	  );
+	}
 
   if (error) {
     return (
       <div className="p-6">
-        <h2 className="text-lg font-semibold">Errore nel caricamento</h2>
-        <p className="text-sm text-red-400 mt-1">{error}</p>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-semibold">Errore nel caricamento</h2>
+            <p className="text-sm text-red-400 mt-1">{error}</p>
+          </div>
+          {/* Pulsante inattivo per ora */}
+          <button type="button" className="btn-primary opacity-60 cursor-not-allowed">
+            + Crea CNC
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">
-          Risultati — <span className="font-mono">{slug}</span>
-        </h1>
-        <p className="text-sm text-muted-foreground">Dati riclassificati e KPI</p>
+      {/* Header con bottone in alto a destra */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            Risultati — <span className="font-mono">{slug}</span>
+          </h1>
+          <p className="text-sm text-muted-foreground">Dati riclassificati e KPI</p>
+        </div>
+        {/* Uguale stile del pulsante “+ Nuova pratica” (btn-primary) — inattivo */}
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() => {
+            // TODO: attivare quando disponibile il flusso reale.
+            // Per ora lasciamo il click inattivo o mostrata una toast/info.
+          }}
+        >
+          + Crea CNC
+        </button>
       </div>
 
       <Card>
