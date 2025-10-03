@@ -34,8 +34,8 @@ export default function Landing() {
 		<ParticlesNet
 	  className="fixed inset-0 z-30 pointer-events-none"
 	  // rete
-	  linkDist={170}
-	  maxSpeed={1.5}
+	  linkDist={240}
+	  maxSpeed={0.8}
 	  // dimensioni / distribuzione
 	  minR={1.4}
 	  maxR={1.7}
@@ -43,12 +43,12 @@ export default function Landing() {
 	  bigScale={3.6}
 	  // coesione
 	  attract
-	  attractRadius={240}
+	  attractRadius={170}
 	  attractStrength={0.0001}
 	  // “sbalzo” al passaggio mouse
 	  retreatMode="burst"
 	  retreatRadius={260}
-	  burstIntensity={18}   // ↑ per più “sparo” (18–26)
+	  burstIntensity={4}   // ↑ per più “sparo” (18–26)
 	  burstMaxSpeed={3.2}  // velocità massima durante il burst
 	  // resa
 	  dprCap={2}
