@@ -30,8 +30,8 @@ export default function NewCase() {
   const [step, setStep] = useState<number>(1);
 
   // metadati
-  const [name, setName] = useState<string>("debug 6");
-  const [slug, setSlug] = useState<string>("debug-6");
+  const [name, setName] = useState<string>("");
+  const [slug, setSlug] = useState<string>("");
   const [companyId, setCompanyId] = useState<string>(defaultCompany);
 
   // files
@@ -169,25 +169,27 @@ export default function NewCase() {
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm mb-1 text-slate-300">Nome pratica</label>
-                <input
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 focus:outline-none focus:border-brand-600"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    const auto = slugify(e.target.value);
-                    if (!slug || slug === slugify(name)) setSlug(auto);
-                  }}
-                  placeholder="Es. debug 6"
-                />
+				<input
+				  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 focus:outline-none focus:border-brand-600"
+				  value={name}
+				  onChange={(e) => {
+					const v = e.target.value;
+					setName(v);
+					const auto = slugify(v);
+					// auto-slug finché l’utente non lo ha personalizzato
+					if (!slug || slug === slugify(name)) setSlug(auto);
+				  }}
+				  placeholder="Inserisci qui il nome della tua pratica"
+				/>
               </div>
               <div>
                 <label className="block text-sm mb-1 text-slate-300">Slug</label>
-                <input
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 font-mono focus:outline-none focus:border-brand-600"
-                  value={slug}
-                  onChange={(e) => setSlug(slugify(e.target.value))}
-                  placeholder="debug-6"
-                />
+				<input
+				  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 focus:outline-none focus:border-brand-600"
+				  value={slug}
+				  onChange={(e) => setSlug(slugify(e.target.value))}
+				  placeholder="Inserisci qui l'id della tua pratica"
+				/>
               </div>
               <div>
                 <label className="block text-sm mb-1 text-slate-300">Company ID</label>
